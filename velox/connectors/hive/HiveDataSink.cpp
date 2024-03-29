@@ -24,6 +24,7 @@
 #include "velox/connectors/hive/HivePartitionFunction.h"
 #include "velox/connectors/hive/TableHandle.h"
 #include "velox/core/ITypedExpr.h"
+#include "velox/core/QueryConfig.h"
 #include "velox/dwio/common/SortingWriter.h"
 #include "velox/exec/OperatorUtils.h"
 #include "velox/exec/SortBuffer.h"
@@ -748,6 +749,7 @@ HiveDataSink::maybeCreateBucketSortWriter(
       sortCompareFlags_,
       sortPool,
       writerInfo_.back()->nonReclaimableSectionHolder.get(),
+      connectorQueryCtx_->prefixSortConfig(),
       spillConfig_,
       writerInfo_.back()->spillStats.get());
   return std::make_unique<dwio::common::SortingWriter>(
