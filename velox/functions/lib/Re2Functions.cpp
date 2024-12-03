@@ -655,9 +655,8 @@ bool matchSubstringsPattern(
     const std::vector<std::string>& patterns) {
   const char* data = input.data();
   for (int i = 0; i < patterns.size(); i++) {
-    auto curPos =
-        std::string_view(data, input.end() - data)
-            .find(std::string_view(patterns[i].c_str(), patterns[i].size()));
+    auto curPos = simd::simdStrstr(
+        data, input.end() - data, patterns[i].c_str(), patterns[i].size());
     if (curPos == std::string::npos) {
       return false;
     }
