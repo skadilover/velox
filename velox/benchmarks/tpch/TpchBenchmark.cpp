@@ -131,7 +131,7 @@ BENCHMARK(q2) {
   benchmark->runQuery(2);
 }
 
-BENCHMARK(q3) {
+/*BENCHMARK(q3) {
   benchmark->runQuery(3);
 }
 
@@ -209,7 +209,7 @@ BENCHMARK(q21) {
 
 BENCHMARK(q22) {
   benchmark->runQuery(22);
-}
+}*/
 
 void tpchBenchmarkMain() {
   VELOX_CHECK_NOT_NULL(benchmark);

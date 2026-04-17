@@ -56,4 +56,46 @@ if(NOT VELOX_DISABLE_GOOGLETEST)
     GTest::gtest_main
     fmt::fmt
   )
+
+  add_executable(velox_hive_paimon_merge_test PaimonMergeTest.cpp)
+  add_test(velox_hive_paimon_merge_test velox_hive_paimon_merge_test)
+
+  target_link_libraries(
+    velox_hive_paimon_merge_test
+    velox_hive_paimon_merge
+    velox_hive_paimon_split
+    velox_dwio_dwrf_writer
+    velox_dwio_dwrf_reader
+    velox_vector_test_lib
+    velox_test_util
+    velox_file
+    GTest::gtest
+    GTest::gtest_main
+    GTest::gmock
+  )
+
+  add_executable(velox_hive_paimon_connector_test PaimonConnectorTest.cpp)
+  add_test(velox_hive_paimon_connector_test velox_hive_paimon_connector_test)
+
+  target_link_libraries(
+    velox_hive_paimon_connector_test
+    velox_hive_paimon_connector
+    velox_hive_connector
+    velox_exec_test_lib
+    Folly::folly
+    GTest::gtest
+  )
+
+  add_executable(velox_hive_paimon_e2e_test PaimonE2ETest.cpp)
+  add_test(velox_hive_paimon_e2e_test velox_hive_paimon_e2e_test)
+
+  target_link_libraries(
+    velox_hive_paimon_e2e_test
+    velox_hive_paimon_connector
+    velox_hive_connector
+    velox_dwio_orc_reader
+    velox_exec_test_lib
+    Folly::folly
+    GTest::gtest
+  )
 endif()

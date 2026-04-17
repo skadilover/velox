@@ -50,7 +50,9 @@ PaimonConnectorSplit::PaimonConnectorSplit(
     const std::vector<PaimonDataFile>& dataFiles,
     std::unordered_map<std::string, std::optional<std::string>> partitionKeys,
     std::optional<int32_t> tableBucketNumber,
-    bool rawConvertible)
+    bool rawConvertible,
+    std::vector<std::string> primaryKeys,
+    std::string mergeEngine)
     : ConnectorSplit(connectorId),
       snapshotId_(snapshotId),
       tableType_(tableType),
@@ -58,7 +60,9 @@ PaimonConnectorSplit::PaimonConnectorSplit(
       dataFiles_(dataFiles),
       partitionKeys_(std::move(partitionKeys)),
       tableBucketNumber_(tableBucketNumber),
-      rawConvertible_(rawConvertible) {
+      rawConvertible_(rawConvertible),
+      primaryKeys_(std::move(primaryKeys)),
+      mergeEngine_(std::move(mergeEngine)) {
   VELOX_CHECK(
       !dataFiles_.empty(), "PaimonConnectorSplit requires non-empty dataFiles");
 
@@ -119,6 +123,13 @@ folly::dynamic PaimonConnectorSplit::serialize() const {
 
   obj["fileFormat"] = dwio::common::toString(fileFormat_);
 
+  folly::dynamic primaryKeysArray = folly::dynamic::array;
+  for (const auto& key : primaryKeys_) {
+    primaryKeysArray.push_back(key);
+  }
+  obj["primaryKeys"] = primaryKeysArray;
+  obj["mergeEngine"] = mergeEngine_;
+
   return obj;
 }
 
@@ -149,6 +160,18 @@ std::shared_ptr<PaimonConnectorSplit> PaimonConnectorSplit::create(
   const auto fileFormat =
       dwio::common::toFileFormat(obj["fileFormat"].asString());
 
+  std::vector<std::string> primaryKeys;
+  if (obj.count("primaryKeys") > 0) {
+    for (const auto& key : obj["primaryKeys"]) {
+      primaryKeys.push_back(key.asString());
+    }
+  }
+
+  std::string mergeEngine = "deduplicate";
+  if (obj.count("mergeEngine") > 0) {
+    mergeEngine = obj["mergeEngine"].asString();
+  }
+
   return std::make_shared<PaimonConnectorSplit>(
       connectorId,
       snapshotId,
@@ -157,7 +180,9 @@ std::shared_ptr<PaimonConnectorSplit> PaimonConnectorSplit::create(
       dataFiles,
       std::move(partitionKeys),
       tableBucketNumber,
-      rawConvertible);
+      rawConvertible,
+      std::move(primaryKeys),
+      std::move(mergeEngine));
 }
 
 // static
@@ -199,6 +224,18 @@ PaimonConnectorSplitBuilder& PaimonConnectorSplitBuilder::rawConvertible(
   return *this;
 }
 
+PaimonConnectorSplitBuilder& PaimonConnectorSplitBuilder::primaryKeys(
+    std::vector<std::string> keys) {
+  primaryKeys_ = std::move(keys);
+  return *this;
+}
+
+PaimonConnectorSplitBuilder& PaimonConnectorSplitBuilder::mergeEngine(
+    std::string engine) {
+  mergeEngine_ = std::move(engine);
+  return *this;
+}
+
 std::shared_ptr<PaimonConnectorSplit> PaimonConnectorSplitBuilder::build() {
   return std::make_shared<PaimonConnectorSplit>(
       connectorId_,
@@ -208,7 +245,9 @@ std::shared_ptr<PaimonConnectorSplit> PaimonConnectorSplitBuilder::build() {
       dataFiles_,
       partitionKeys_,
       tableBucketNumber_,
-      rawConvertible_);
+      rawConvertible_,
+      primaryKeys_,
+      mergeEngine_);
 }
 
 } // namespace facebook::velox::connector::hive::paimon

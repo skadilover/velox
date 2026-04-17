@@ -21,6 +21,7 @@
 namespace facebook::velox::connector::hive::paimon {
 
 class PaimonConnectorSplit;
+class PaimonMergeReader;
 
 /// Paimon-specific data source that extends FileDataSource.
 ///
@@ -35,7 +36,8 @@ class PaimonConnectorSplit;
 ///   rawConvertible=false (primary-key with overlapping keys):
 ///     Merge path. A PaimonMergeReader opens all files simultaneously and
 ///     performs a sorted merge by primary key, deduplicating by sequence
-///     number. Not yet implemented.
+///     number. The merge reader handles IntervalPartition, k-way merge,
+///     and deduplication internally.
 class PaimonDataSource : public FileDataSource {
  public:
   PaimonDataSource(
@@ -47,7 +49,17 @@ class PaimonDataSource : public FileDataSource {
       const ConnectorQueryCtx* connectorQueryCtx,
       const std::shared_ptr<PaimonConfig>& paimonConfig);
 
+  /// Destructor defined in .cpp to allow unique_ptr<PaimonMergeReader> with
+  /// incomplete type in the header.
+  ~PaimonDataSource() override;
+
   void addSplit(std::shared_ptr<ConnectorSplit> split) override;
+
+  std::optional<RowVectorPtr> next(
+      uint64_t size,
+      velox::ContinueFuture& future) override;
+
+  uint64_t getCompletedRows() override;
 
  protected:
   /// Creates a PaimonSplitReader with all data files from the Paimon split.
@@ -58,6 +70,15 @@ class PaimonDataSource : public FileDataSource {
   // The original Paimon split. Stored so createSplitReader() can access
   // the full list of data files.
   std::shared_ptr<PaimonConnectorSplit> paimonSplit_;
+
+  // Output type stored for merge path (FileDataSource::outputType_ is private).
+  RowTypePtr mergeOutputType_;
+
+  // Merge reader for rawConvertible=false splits. Null when using the raw path.
+  std::unique_ptr<PaimonMergeReader> mergeReader_;
+
+  // Completed rows counter for merge path.
+  uint64_t mergeCompletedRows_{0};
 };
 
 } // namespace facebook::velox::connector::hive::paimon

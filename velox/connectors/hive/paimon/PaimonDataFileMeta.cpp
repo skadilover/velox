@@ -95,6 +95,12 @@ folly::dynamic PaimonDataFile::serialize() const {
   if (deletionFile.has_value()) {
     obj["deletionFile"] = deletionFile->serialize();
   }
+  if (minKey.has_value()) {
+    obj["minKey"] = minKey.value();
+  }
+  if (maxKey.has_value()) {
+    obj["maxKey"] = maxKey.value();
+  }
   return obj;
 }
 
@@ -113,6 +119,12 @@ PaimonDataFile PaimonDataFile::create(const folly::dynamic& obj) {
   file.source = sourceFromString(obj["sourceType"].asString());
   if (obj.count("deletionFile") > 0) {
     file.deletionFile = PaimonDeletionFile::create(obj["deletionFile"]);
+  }
+  if (obj.count("minKey") > 0 && !obj["minKey"].isNull()) {
+    file.minKey = obj["minKey"].asString();
+  }
+  if (obj.count("maxKey") > 0 && !obj["maxKey"].isNull()) {
+    file.maxKey = obj["maxKey"].asString();
   }
   return file;
 }

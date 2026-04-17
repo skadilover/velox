@@ -149,6 +149,14 @@ struct PaimonDataFile {
   /// See PaimonDeletionFile for details.
   std::optional<PaimonDeletionFile> deletionFile;
 
+  /// Binary-encoded min/max key statistics for this file, extracted from
+  /// manifest metadata. Used by IntervalPartition to group files into
+  /// non-overlapping sections for merge-on-read. Paimon's binary row encoding
+  /// preserves sort order for common key types. Nullopt if key stats are
+  /// unavailable (conservative fallback: all files in one section).
+  std::optional<std::string> minKey;
+  std::optional<std::string> maxKey;
+
   std::string toString() const;
   folly::dynamic serialize() const;
   static PaimonDataFile create(const folly::dynamic& obj);

@@ -465,11 +465,8 @@ namespace facebook::velox::connector::hive::paimon {
 /// logical bucket which may contain multiple physical files across LSM-tree
 /// levels.
 ///
-/// NOTE: Table-wide metadata (primary key columns, merge engine, table schema)
-/// is NOT carried in the split. A future PaimonTableHandle (extending
-/// HiveTableHandle) will carry this information, needed for merge-on-read
-/// (key deduplication) and schema evolution. For batch reads of
-/// rawConvertible=true splits, the existing HiveTableHandle suffices.
+/// For primary-key tables with rawConvertible=false, the split also carries
+/// primaryKeys and mergeEngine needed for merge-on-read.
 class PaimonConnectorSplit : public connector::ConnectorSplit {
  public:
   /// @param connectorId Connector identifier.
@@ -488,6 +485,13 @@ class PaimonConnectorSplit : public connector::ConnectorSplit {
   ///        key deduplication needed across LSM levels). Set by the Paimon
   ///        planner based on the compaction state of the entire bucket. Only
   ///        meaningful for primary-key tables.
+  /// @param primaryKeys Primary key column names. Required for primary-key
+  ///        tables with rawConvertible=false (merge-on-read). Empty for
+  ///        append-only tables.
+  /// @param mergeEngine Merge engine name (e.g., "deduplicate",
+  ///        "partial-update", "aggregation"). Determines how duplicate keys
+  ///        are resolved during merge-on-read. Only meaningful for primary-key
+  ///        tables with rawConvertible=false.
   PaimonConnectorSplit(
       const std::string& connectorId,
       int64_t snapshotId,
@@ -496,7 +500,9 @@ class PaimonConnectorSplit : public connector::ConnectorSplit {
       const std::vector<PaimonDataFile>& dataFiles,
       std::unordered_map<std::string, std::optional<std::string>> partitionKeys,
       std::optional<int32_t> tableBucketNumber,
-      bool rawConvertible = true);
+      bool rawConvertible = true,
+      std::vector<std::string> primaryKeys = {},
+      std::string mergeEngine = "deduplicate");
 
   int64_t snapshotId() const {
     return snapshotId_;
@@ -527,6 +533,14 @@ class PaimonConnectorSplit : public connector::ConnectorSplit {
     return fileFormat_;
   }
 
+  const std::vector<std::string>& primaryKeys() const {
+    return primaryKeys_;
+  }
+
+  const std::string& mergeEngine() const {
+    return mergeEngine_;
+  }
+
   std::string toString() const override;
 
   folly::dynamic serialize() const override;
@@ -545,6 +559,8 @@ class PaimonConnectorSplit : public connector::ConnectorSplit {
       partitionKeys_;
   const std::optional<int32_t> tableBucketNumber_;
   const bool rawConvertible_;
+  const std::vector<std::string> primaryKeys_;
+  const std::string mergeEngine_;
 };
 
 /// Builder for PaimonConnectorSplit construction.
@@ -571,6 +587,10 @@ class PaimonConnectorSplitBuilder {
 
   PaimonConnectorSplitBuilder& rawConvertible(bool value);
 
+  PaimonConnectorSplitBuilder& primaryKeys(std::vector<std::string> keys);
+
+  PaimonConnectorSplitBuilder& mergeEngine(std::string engine);
+
   std::shared_ptr<PaimonConnectorSplit> build();
 
  private:
@@ -582,6 +602,8 @@ class PaimonConnectorSplitBuilder {
   std::unordered_map<std::string, std::optional<std::string>> partitionKeys_;
   std::optional<int32_t> tableBucketNumber_;
   bool rawConvertible_{true};
+  std::vector<std::string> primaryKeys_;
+  std::string mergeEngine_{"deduplicate"};
 };
 
 } // namespace facebook::velox::connector::hive::paimon

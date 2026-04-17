@@ -15,6 +15,7 @@
  */
 #include "velox/connectors/hive/paimon/PaimonConnector.h"
 
+#include <folly/init/Init.h>
 #include <gtest/gtest.h>
 
 #include "velox/common/base/tests/GTestUtils.h"
@@ -327,3 +328,9 @@ TEST_F(PaimonConnectorTest, appendOnlyMultipleSplits) {
 
 } // namespace
 } // namespace facebook::velox::connector::hive::paimon
+
+int main(int argc, char** argv) {
+  testing::InitGoogleTest(&argc, argv);
+  folly::Init init{&argc, &argv, false};
+  return RUN_ALL_TESTS();
+}

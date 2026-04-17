@@ -18,6 +18,7 @@
 #include "velox/common/Casts.h"
 #include "velox/connectors/hive/paimon/PaimonConnectorSplit.h"
 #include "velox/connectors/hive/paimon/PaimonSplitReader.h"
+#include "velox/connectors/hive/paimon/merge/PaimonMergeReader.h"
 
 namespace facebook::velox::connector::hive::paimon {
 
@@ -36,20 +37,24 @@ PaimonDataSource::PaimonDataSource(
           fileHandleFactory,
           ioExecutor,
           connectorQueryCtx,
-          paimonConfig) {}
+          paimonConfig),
+      mergeOutputType_(outputType) {}
+
+PaimonDataSource::~PaimonDataSource() = default;
 
 void PaimonDataSource::addSplit(std::shared_ptr<ConnectorSplit> split) {
   paimonSplit_ = checkedPointerCast<PaimonConnectorSplit>(split);
 
   if (!paimonSplit_->rawConvertible()) {
-    VELOX_NYI(
-        "Paimon merge-on-read is not yet implemented. "
-        "Primary-key tables with rawConvertible=false require merge-on-read "
-        "to deduplicate records across LSM levels.");
+    // Merge path: create a PaimonMergeReader that handles IntervalPartition,
+    // k-way merge, and deduplication.
+    mergeReader_ = std::make_unique<PaimonMergeReader>(
+        paimonSplit_, mergeOutputType_, pool_);
+    return;
   }
 
-  // Create a FileConnectorSplit for the first data file and delegate to
-  // FileDataSource::addSplit(), which calls createSplitReader() to create
+  // Raw path: create a FileConnectorSplit for the first data file and delegate
+  // to FileDataSource::addSplit(), which calls createSplitReader() to create
   // a PaimonSplitReader that handles all files internally.
   const auto& firstFile = paimonSplit_->dataFiles().front();
   auto firstFileSplit = std::make_shared<FileConnectorSplit>(
@@ -64,6 +69,27 @@ void PaimonDataSource::addSplit(std::shared_ptr<ConnectorSplit> split) {
       paimonSplit_->partitionKeys());
 
   FileDataSource::addSplit(std::move(firstFileSplit));
+}
+
+std::optional<RowVectorPtr> PaimonDataSource::next(
+    uint64_t size,
+    velox::ContinueFuture& future) {
+  if (mergeReader_) {
+    auto result = mergeReader_->next(size);
+    if (!result || result->size() == 0) {
+      return nullptr;
+    }
+    mergeCompletedRows_ += result->size();
+    return result;
+  }
+  return FileDataSource::next(size, future);
+}
+
+uint64_t PaimonDataSource::getCompletedRows() {
+  if (mergeReader_) {
+    return mergeCompletedRows_;
+  }
+  return FileDataSource::getCompletedRows();
 }
 
 std::unique_ptr<FileSplitReader> PaimonDataSource::createSplitReader() {
